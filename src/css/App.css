@@ -1,0 +1,19 @@
+body {
+  margin: 0;
+  background-color: #000; /* black background */
+  color: #fff; /* white text */
+  font-family: Arial, sans-serif;
+}
+
+.navbar a {
+  color: #fff;
+  text-decoration: none;
+}
+
+.navbar a:hover {
+  text-decoration: underline;
+}
+.navbar {
+  background-color: #333; /* dark gray background for navbar */
+  padding: 10px;
+}
