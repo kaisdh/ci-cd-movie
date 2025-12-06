@@ -1,32 +1,36 @@
 pipeline {
     agent any
     stages {
-        stage('Checkout') {
-            steps { checkout scm }
+        stage('1. Checkout') { steps { checkout scm } }
+
+        stage('2. Setup') {
+            steps { bat 'docker run --rm node:20-alpine node -v' }
         }
-       
-        stage('Setup') {
-            agent { docker { image 'node:18-alpine' } }
-            steps { sh 'npm install' }
-        }
-        
-        stage('Build') {
+
+        stage('3. Build Rapide') {
             steps {
-                sh 'docker build -t movies-pr:${BUILD_NUMBER} .'
+                // On nomme l'image différemment pour ne pas mélanger
+                bat "docker build -t movies-pr:${BUILD_NUMBER} ."
             }
         }
-         
-        stage('Smoke Test') {
+
+        stage('4. Run Test') {
             steps {
-                
-                sh 'docker run -d -p 3001:80 --name pr-container movies-pr:${BUILD_NUMBER}'
-               
-                sh 'chmod +x smoke_test.sh'
-                sh './smoke_test.sh'
+                bat "docker rm -f pr-container || exit 0"
+                // On utilise un port différent (3001) pour ne pas bloquer le dev (3000)
+                bat "docker run -d -p 3001:80 --name pr-container movies-pr:${BUILD_NUMBER}"
             }
         }
-    }
-    post {
-        always { sh 'docker rm -f pr-container || true' }
+
+        stage('5. Smoke Test') {
+            steps {
+                sleep 5
+                bat "curl -I http://localhost:3001"
+            }
+        }
+
+        stage('6. Cleanup') {
+            steps { bat "docker rm -f pr-container" }
+        }
     }
 }
