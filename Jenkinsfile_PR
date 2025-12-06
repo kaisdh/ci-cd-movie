@@ -1,50 +1,32 @@
-// jenkins_configs/Jenkinsfile_PR
-
 pipeline {
     agent any
-    
-    environment {
-        DOCKER_IMAGE = 'movie-react-app-pr'
-        TEST_PORT = 8080 
-    }
-
     stages {
-        stage('Checkout & Setup') {
+        stage('Checkout') {
+            steps { checkout scm }
+        }
+       
+        stage('Setup') {
+            agent { docker { image 'node:18-alpine' } }
+            steps { sh 'npm install' }
+        }
+        
+        stage('Build') {
             steps {
-                cleanWs()
-                checkout scm
-                sh 'npm install'
+                sh 'docker build -t movies-pr:${BUILD_NUMBER} .'
             }
         }
-
-        stage('Build & Test Rapide') {
+         
+        stage('Smoke Test') {
             steps {
-                parallel(
-                    "Node 18 Build": { sh 'docker run --rm -v $(pwd):/app -w /app node:18-alpine npm run build' },
-                    "Code Linting": { sh 'echo "Running quick Linting..."' }
-                )
-            }
-        }
-
-        stage('Run Docker & Smoke Test') {
-            steps {
-                sh "docker build -t ${DOCKER_IMAGE} ."
-                sh "docker run -d -p ${TEST_PORT}:80 --name ${DOCKER_IMAGE}-${env.BUILD_ID} ${DOCKER_IMAGE}"
+                
+                sh 'docker run -d -p 3001:80 --name pr-container movies-pr:${BUILD_NUMBER}'
+               
+                sh 'chmod +x smoke_test.sh'
                 sh './smoke_test.sh'
             }
         }
-
-        stage('Archive Logs') {
-            steps {
-                // Seulement archivage des logs de test, pas des livrables
-                archiveArtifacts artifacts: 'smoke_test.sh', fingerprint: true
-            }
-        }
     }
-    
     post {
-        always {
-            sh "docker rm -f ${DOCKER_IMAGE}-${env.BUILD_ID} || true"
-        }
+        always { sh 'docker rm -f pr-container || true' }
     }
 }
