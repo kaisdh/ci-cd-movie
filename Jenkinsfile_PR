@@ -9,7 +9,7 @@ pipeline {
 
         stage('3. Build Rapide') {
             steps {
-                // On nomme l'image différemment pour ne pas mélanger
+              
                 bat "docker build -t movies-pr:${BUILD_NUMBER} ."
             }
         }
@@ -17,8 +17,8 @@ pipeline {
         stage('4. Run Test') {
             steps {
                 bat "docker rm -f pr-container || exit 0"
-                // On utilise un port différent (3001) pour ne pas bloquer le dev (3000)
-                bat "docker run -d -p 3001:80 --name pr-container movies-pr:${BUILD_NUMBER}"
+            
+              bat "docker run -d -p 3001:80 --name pr-container movies-pr:${BUILD_NUMBER}"
             }
         }
 
@@ -28,9 +28,18 @@ pipeline {
                 bat "curl -I http://localhost:3001"
             }
         }
-
-        stage('6. Cleanup') {
-            steps { bat "docker rm -f pr-container" }
+       stage('6. Archive Artifacts') {
+            steps {
+                echo "Archivage des logs de test..."
+                
+                archiveArtifacts artifacts: 'smoke_test_result.log', fingerprint: true
+            }
+stage('7. Cleanup') {
+            steps { 
+                bat "docker rm -f pr-container" 
+               
+                bat "docker rmi movies-pr:${BUILD_NUMBER} || true" 
+            }
         }
     }
-}
+}   
