@@ -1,13 +1,21 @@
 #!/bin/bash
 
-# On attend 5 secondes pour être sûr que le site est lancé
+# URL par défaut (port 3000)
+URL="http://localhost:3000"
+
+# Si on donne un argument (ex: http://localhost:3001), on l'utilise
+if [ ! -z "$1" ]; then
+  URL="$1"
+fi
+
+echo "Test de connexion vers : $URL"
 sleep 5
 
-# On teste si l'URL http://localhost:3000 répond bien
-if curl --head --silent --fail http://localhost:3000; then
-  echo "SUCCESS: Le site fonctionne !"
+# Test avec curl (silencieux)
+if curl --output /dev/null --silent --head --fail "$URL"; then
+  echo "STATUS: PASSED (Le site répond)"
   exit 0
 else
-  echo "FAILURE: Le site ne repond pas..."
+  echo "STATUS: FAILED (Le site ne répond pas)"
   exit 1
 fi
