@@ -2,7 +2,7 @@ pipeline {
     agent any
     stages {
         stage('1. Checkout') { steps { checkout scm } }
-        
+
         stage('2. Setup & Parallel') {
             parallel {
                 stage('Node 18') { steps { bat 'docker run --rm node:18-alpine node -v' } }
@@ -32,11 +32,9 @@ pipeline {
             steps { bat "docker rm -f dev-container" }
         }
 
-        
         stage('7. Archive Artifacts') {
             steps {
-                
-                archiveArtifacts artifacts: 'Dockerfile, Jenkinsfile*', allowEmptyArchive: true
+                archiveArtifacts artifacts: 'Dockerfile, Jenkinsfile*, package.json', allowEmptyArchive: true
             }
         }
     }
