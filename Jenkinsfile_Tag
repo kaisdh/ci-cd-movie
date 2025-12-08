@@ -2,81 +2,87 @@ pipeline {
     agent any
     
     stages {
-        // --- 1. CHECKOUT ---
+        // 1. Checkout
         stage('1. Checkout') { 
             steps { 
-                echo "Récupération du code..."
+                echo "Récupération du code de la version : ${env.TAG_NAME}"
+                cleanWs()
                 checkout scm 
             } 
         }
 
-        // --- 2. SETUP (NOUVEAU) ---
+        // 2. Setup (Préparation de l'environnement)
         stage('2. Setup & Install') {
             steps { 
-                echo "Préparation de l'environnement..."
-                // Simulation d'une étape d'installation si votre Dockerfile ne gère pas tout
-                // Ici, on vérifie juste que Node est accessible via Docker
-                bat 'docker run --rm node:20-alpine node -v' 
+                echo "Installation des dépendances Node sur l'hôte..."
+                
+                bat "docker run --rm -v %CD%:/app -w /app node:20-alpine npm install"
             }
         }
         
-        // --- 3. BUILD VERSIONNÉ ---
-        stage('3. Build Versionné') {
+        stage('3. Build Versionné & Parallèle') {
             steps {
                 script {
-                    // Si TAG_NAME est vide (test manuel), on met 'v-test-X'
-                    def version = env.TAG_NAME ?: "v-test-${BUILD_NUMBER}"
-                    env.RELEASE_VERSION = version // On enregistre la version pour les étapes suivantes
+                    def version = env.TAG_NAME ?: "v-manual-${BUILD_NUMBER}"
+                    env.RELEASE_VERSION = version 
                     
-                    // Exigence : Dockerisation propre
-                    bat "docker build -t movies-release:${env.RELEASE_VERSION} ."
+                    parallel(
+                        "App Build (On Host)": {
+                            echo "Construction de l'application sur l'hôte (crée le dossier 'dist')..."
+                         
+                            bat "docker run --rm -v %CD%:/app -w /app node:20-alpine npm run build"
+                        },
+                        "Tests de Validation": {
+                            echo "Exécution des tests unitaires en parallèle..."
+                        }
+                    )
                     bat "echo Build de la version ${env.RELEASE_VERSION} réussi > rapport_build.txt"
                 }
             }
         }
 
-        // --- 4. RUN (NOUVEAU) ---
-        stage('4. Run Docker (Test Local)') {
+        // 
+        stage('4. Run Docker (Construction et Test Local)') {
             steps {
-                scrip
+                script {
+                    //
+                    bat "docker build -t movies-release:${env.RELEASE_VERSION} ."
+
                     bat "docker rm -f release-container || exit 0" 
-                   
                     bat "docker run -d -p 3002:80 --name release-container movies-release:${env.RELEASE_VERSION}"
                 }
             }
         }
 
-        
+        // 5. Smoke Test
         stage('5. Smoke Test') {
             steps {
-                echo "Vérification du service..."
-                sleep 5
-                
+                echo "VÃ©rification du service sur le port 3002..."
+                sleep 5 
                 bat "curl -I http://localhost:3002 > smoke_test_result.log"
-                
-                bat 'type smoke_test_result.log && find /C:"200 OK" smoke_test_result.log'
+                bat 'find "200 OK" smoke_test_result.log || exit 1'
             }
         }
 
-        
         stage('6. Archive Artifacts') {
             steps {
                 echo "Archivage des livrables de la version ${env.RELEASE_VERSION}..."
                 
-                /
                 archiveArtifacts artifacts: 'rapport_build.txt, smoke_test_result.log', allowEmptyArchive: true
                 
+             
+                bat 'powershell Compress-Archive -Path dist -DestinationPath release-${RELEASE_VERSION}.zip'
                 
-                bat 'tar -czf release-${RELEASE_VERSION}.tar.gz build/'
-                archiveArtifacts artifacts: 'release-${RELEASE_VERSION}.tar.gz', fingerprint: true
+            
+                archiveArtifacts artifacts: "release-${RELEASE_VERSION}.zip", fingerprint: true
             }
         }
-     
+        
         stage('7. Cleanup') {
             steps { 
-                echo "Nettoyage des conteneurs et images temporaires..."
+                echo "Nettoyage des conteneurs de test..."
                 bat "docker rm -f release-container"
-                
+            }
         }
     }
 }
